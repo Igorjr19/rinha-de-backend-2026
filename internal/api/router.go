@@ -23,6 +23,10 @@ func (rt *router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	case "/ready":
 		if r.Method == http.MethodGet {
+			if !rt.scorer.Ready() {
+				w.WriteHeader(http.StatusServiceUnavailable)
+				return
+			}
 			return
 		}
 	default:
