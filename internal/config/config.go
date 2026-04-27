@@ -3,12 +3,14 @@ package config
 import "os"
 
 type Config struct {
-	Port string
+	Port       string
+	SocketPath string
 }
 
 func Load() Config {
 	return Config{
-		Port: getEnv("PORT", "9999"),
+		Port:       getEnv("PORT", "9999"),
+		SocketPath: os.Getenv("SOCKET_PATH"),
 	}
 }
 

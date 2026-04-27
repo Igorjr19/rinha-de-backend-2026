@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"log"
+	"net"
 	"net/http"
+	"os"
 	"os/signal"
 	"syscall"
 	"time"
@@ -19,7 +21,6 @@ func main() {
 	scorer := fraud.NewScorer()
 
 	server := &http.Server{
-		Addr:              ":" + cfg.Port,
 		Handler:           api.NewRouter(scorer),
 		ReadHeaderTimeout: 1 * time.Second,
 		ReadTimeout:       2 * time.Second,
@@ -28,11 +29,16 @@ func main() {
 		MaxHeaderBytes:    4 << 10,
 	}
 
+	ln, err := listen(cfg)
+	if err != nil {
+		log.Fatalf("listen: %v", err)
+	}
+
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
 	go func() {
-		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		if err := server.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatalf("server failed: %v", err)
 		}
 	}()
@@ -42,4 +48,20 @@ func main() {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	_ = server.Shutdown(shutdownCtx)
+}
+
+func listen(cfg config.Config) (net.Listener, error) {
+	if cfg.SocketPath != "" {
+		_ = os.Remove(cfg.SocketPath)
+		ln, err := net.Listen("unix", cfg.SocketPath)
+		if err != nil {
+			return nil, err
+		}
+		if err := os.Chmod(cfg.SocketPath, 0666); err != nil {
+			ln.Close()
+			return nil, err
+		}
+		return ln, nil
+	}
+	return net.Listen("tcp", ":"+cfg.Port)
 }
